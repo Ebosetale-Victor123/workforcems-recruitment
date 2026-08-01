@@ -20,6 +20,10 @@ Connects to an existing BlindHire Supabase project.
    npm run dev
    ```
 
+Required: Create a Supabase Storage bucket named 'cv-uploads'
+with public access. Go to Storage → New Bucket → name: cv-uploads
+→ Public bucket: ON
+
 ## Features
 
 - **Dashboard** — live stats + recent applications table

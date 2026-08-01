@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MapPin, Building2, Users, Star, UserCheck, Calendar } from 'lucide-react'
+import { MapPin, Building2, Users, Star, UserCheck, Calendar, Trash2, Pencil } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import StatCard from '../components/ui/StatCard'
 import { StatusBadge } from '../components/ui/Badge'
@@ -103,6 +103,53 @@ const s = {
     padding: '12px 0', borderBottom: '1px solid #1f1f1f',
     fontSize: '13px', color: '#9ca3af',
   },
+  statusRow: { display: 'flex', alignItems: 'center' },
+  editIconBtn: {
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    color: '#9ca3af', padding: '4px', display: 'inline-flex',
+    alignItems: 'center', marginLeft: '8px', opacity: 0.7,
+    transition: 'opacity 0.15s',
+  },
+  deleteIconBtn: {
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    color: '#ef4444', padding: '4px', display: 'inline-flex',
+    alignItems: 'center', marginLeft: '12px', opacity: 0.7,
+    transition: 'opacity 0.15s',
+  },
+  deleteOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  deleteModal: {
+    background: '#141414', border: '1px solid #2a2a2a',
+    borderRadius: '12px', padding: '24px',
+    position: 'fixed', top: '50%', left: '50%',
+    transform: 'translate(-50%, -50%)', width: '360px', zIndex: 1001,
+  },
+  deleteIconWrap: { display: 'flex', justifyContent: 'center', marginBottom: '12px' },
+  deleteHeading: { fontSize: '18px', fontWeight: '700', color: '#ffffff', textAlign: 'center' },
+  deleteBody: { fontSize: '14px', color: '#9ca3af', textAlign: 'center', marginTop: '8px' },
+  deleteActions: { display: 'flex', gap: '12px', marginTop: '20px' },
+  deleteCancelBtn: {
+    background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#ffffff',
+    borderRadius: '8px', padding: '10px 20px', flex: 1, cursor: 'pointer',
+  },
+  deleteConfirmBtn: {
+    background: '#ef4444', border: 'none', color: '#ffffff',
+    borderRadius: '8px', padding: '10px 20px', flex: 1, fontWeight: '600', cursor: 'pointer',
+  },
+  deleteToast: {
+    background: '#ef4444', color: '#ffffff',
+    padding: '12px 20px', borderRadius: '8px',
+    position: 'fixed', bottom: '24px', right: '24px',
+    zIndex: 9999, fontWeight: '500',
+  },
+  successToast: {
+    background: '#22c55e', color: '#000000',
+    padding: '12px 20px', borderRadius: '8px',
+    position: 'fixed', bottom: '24px', right: '24px',
+    zIndex: 9999, fontWeight: '600',
+  },
 }
 
 function isOverdue(date) {
@@ -114,7 +161,7 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function JobCard({ job, appCounts = {}, onClick }) {
+function JobCard({ job, appCounts = {}, onClick, onEditClick, onDeleteClick }) {
   const [hovered, setHovered] = useState(false)
   const overdue = isOverdue(job.closing_date)
   const counts = appCounts[job.id] || {}
@@ -127,7 +174,27 @@ function JobCard({ job, appCounts = {}, onClick }) {
     >
       <div style={s.row}>
         <span style={s.jobTitle}>{job.title}</span>
-        <StatusBadge status={job.status} />
+        <div style={s.statusRow}>
+          <StatusBadge status={job.status} />
+          <button
+            type="button"
+            style={s.editIconBtn}
+            onClick={e => { e.stopPropagation(); onEditClick(job) }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = '#ffffff' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.7'; e.currentTarget.style.color = '#9ca3af' }}
+          >
+            <Pencil size={16} />
+          </button>
+          <button
+            type="button"
+            style={s.deleteIconBtn}
+            onClick={e => { e.stopPropagation(); onDeleteClick(job) }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1' }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '0.7' }}
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
       <div style={s.meta}>
         {job.department && (
@@ -215,6 +282,95 @@ function Drawer({ job, onClose }) {
   )
 }
 
+function DeleteJobModal({ job, onCancel, onConfirm }) {
+  return (
+    <div style={s.deleteOverlay} onClick={onCancel}>
+      <div style={s.deleteModal} onClick={e => e.stopPropagation()}>
+        <div style={s.deleteIconWrap}>
+          <Trash2 size={24} color="#ef4444" />
+        </div>
+        <div style={s.deleteHeading}>Delete Job Posting?</div>
+        <div style={s.deleteBody}>
+          This will permanently delete '{job.title}' and cannot be undone. Existing applications for this role will not be deleted.
+        </div>
+        <div style={s.deleteActions}>
+          <button type="button" style={s.deleteCancelBtn} onClick={onCancel}>Cancel</button>
+          <button type="button" style={s.deleteConfirmBtn} onClick={() => onConfirm(job)}>Delete Job</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EditJobModal({ form, setForm, onClose, onSubmit }) {
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState(null)
+
+  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+
+  const submit = async () => {
+    if (!form.title.trim()) { setErr('Job title is required.'); return }
+    if (!form.department.trim()) { setErr('Department is required.'); return }
+    setSaving(true)
+    setErr(null)
+    try {
+      await onSubmit(form)
+      onClose()
+    } catch (e) {
+      setErr(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div style={s.modalBg} onClick={onClose}>
+      <div style={s.modal} onClick={e => e.stopPropagation()}>
+        <div style={s.modalTitle}>Edit Job</div>
+        {err && <div style={{ ...s.error, marginBottom: '16px' }}>{err}</div>}
+        {[
+          ['title', 'Job Title *', 'input'],
+          ['department', 'Department *', 'input'],
+          ['location', 'Location', 'input'],
+          ['employment_type', 'Employment Type', 'input'],
+          ['salary_range', 'Salary Range', 'input'],
+          ['closing_date', 'Closing Date', 'date'],
+          ['description', 'Description', 'textarea'],
+          ['requirements', 'Requirements', 'textarea'],
+        ].map(([key, lbl, type]) => (
+          <div key={key} style={s.formGroup}>
+            <label style={s.label}>{lbl}</label>
+            {type === 'textarea' ? (
+              <textarea style={s.textarea} value={form[key]} onChange={set(key)} />
+            ) : (
+              <input
+                style={s.input}
+                type={type === 'date' ? 'date' : 'text'}
+                value={form[key]}
+                onChange={set(key)}
+              />
+            )}
+          </div>
+        ))}
+        <div style={s.formGroup}>
+          <label style={s.label}>Status</label>
+          <select style={s.input} value={form.status} onChange={set('status')}>
+            <option value="open">open</option>
+            <option value="closed">closed</option>
+            <option value="filled">filled</option>
+            <option value="draft">draft</option>
+          </select>
+        </div>
+        <div style={s.btnRow}>
+          <button type="button" style={s.cancelBtn} onClick={onClose}>Cancel</button>
+          <button type="button" style={s.primaryBtn} onClick={submit} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const EMPTY_FORM = {
   title: '', department: '', description: '', requirements: '',
   employment_type: '', salary_range: '', location: '', closing_date: '',
@@ -281,11 +437,58 @@ function PostJobModal({ onClose, onSubmit }) {
 }
 
 export default function Jobs() {
-  const { jobs, loading, error, createJob } = useJobs()
+  const { jobs, loading, error, createJob, deleteJob, updateJob } = useJobs()
   const { applications } = useApplications()
   const [filter, setFilter] = useState('All')
   const [selectedJob, setSelectedJob] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [jobToDelete, setJobToDelete] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [jobToEdit, setJobToEdit] = useState(null)
+  const [editForm, setEditForm] = useState({})
+  const [successToast, setSuccessToast] = useState(null)
+
+  const handleConfirmDelete = async (job) => {
+    await deleteJob(job.id)
+    setJobToDelete(null)
+    setToast('Job posting deleted')
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleEditClick = (job) => {
+    setJobToEdit(job)
+    setEditForm({
+      title: job.title || '',
+      department: job.department || '',
+      location: job.location || '',
+      employment_type: job.employment_type || job.type || 'full-time',
+      salary_range: job.salary_range || '',
+      closing_date: job.closing_date || '',
+      description: job.description || '',
+      requirements: job.requirements || '',
+      status: job.status || 'open',
+    })
+  }
+
+  const handleUpdateJob = async (form) => {
+    const updates = {
+      title: form.title,
+      department: form.department,
+      location: form.location,
+      employment_type: form.employment_type,
+      salary_range: form.salary_range,
+      closing_date: form.closing_date || null,
+      description: form.description,
+      requirements: form.requirements,
+      status: form.status,
+      type: form.employment_type,
+    }
+    const { error: err } = await updateJob(jobToEdit.id, updates)
+    if (err) throw new Error(err.message)
+    setJobToEdit(null)
+    setSuccessToast('Job updated successfully')
+    setTimeout(() => setSuccessToast(null), 3000)
+  }
 
   const appCounts = {}
   applications.forEach(app => {
@@ -334,6 +537,8 @@ export default function Jobs() {
               job={job}
               appCounts={appCounts}
               onClick={() => setSelectedJob(job)}
+              onEditClick={handleEditClick}
+              onDeleteClick={setJobToDelete}
             />
           ))
         )}
@@ -341,6 +546,23 @@ export default function Jobs() {
 
       {selectedJob && <Drawer job={selectedJob} onClose={() => setSelectedJob(null)} />}
       {showModal && <PostJobModal onClose={() => setShowModal(false)} onSubmit={createJob} />}
+      {jobToEdit && (
+        <EditJobModal
+          form={editForm}
+          setForm={setEditForm}
+          onClose={() => setJobToEdit(null)}
+          onSubmit={handleUpdateJob}
+        />
+      )}
+      {jobToDelete && (
+        <DeleteJobModal
+          job={jobToDelete}
+          onCancel={() => setJobToDelete(null)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
+      {toast && <div style={s.deleteToast}>{toast}</div>}
+      {successToast && <div style={s.successToast}>{successToast}</div>}
     </div>
   )
 }

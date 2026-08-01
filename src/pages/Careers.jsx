@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { MapPin, Briefcase, CheckCircle } from 'lucide-react'
+import { extractTextFromPDF } from '../lib/pdfExtract'
+import { anonymiseCVText } from '../lib/anonymise'
 
 const s = {
   page: { minHeight: '100vh', background: '#000000', color: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif' },
@@ -260,24 +262,54 @@ function ApplyModal({ job, onClose, onSuccess }) {
     setSubmitting(true)
     setFormErr(null)
 
-    const ref = genRef()
-    let cv_text = null
-    let cv_file_url = null
-
+    // Step 1 — Get raw CV text
+    let rawCVText = ''
     if (cvMode === 'pdf' && pdfFile) {
-      // Store PDF as base64 in cv_file_url, note in cv_text
-      const reader = new FileReader()
-      const base64 = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(pdfFile)
-      })
-      cv_file_url = base64
-      cv_text = 'PDF uploaded — see cv_file_url'
+      try {
+        rawCVText = await extractTextFromPDF(pdfFile)
+      } catch (err) {
+        setFieldErrors({ cv: err.message })
+        setSubmitting(false)
+        return
+      }
     } else {
-      cv_text = form.cv_text || null
+      rawCVText = form.cv_text.trim()
     }
 
+    if (!rawCVText) {
+      setFieldErrors({ cv: 'Please provide your CV' })
+      setSubmitting(false)
+      return
+    }
+
+    // Step 2 — Anonymise the CV
+    const nameParts = form.candidate_name.trim().split(' ')
+    const firstName = nameParts[0] || ''
+    const lastName = nameParts.slice(1).join(' ') || ''
+    const anonymisedCV = anonymiseCVText(rawCVText, firstName, lastName)
+
+    // Step 3 — Upload PDF to Supabase Storage if a file was provided
+    let cv_file_url = null
+    if (pdfFile) {
+      const safeFileName = pdfFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+      const filePath = `candidates/${Date.now()}_${safeFileName}`
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from('cv-uploads')
+        .upload(filePath, pdfFile, { upsert: true })
+
+      if (!uploadError) {
+        const { data: urlData } = supabase
+          .storage
+          .from('cv-uploads')
+          .getPublicUrl(filePath)
+        cv_file_url = urlData.publicUrl
+      }
+    }
+
+    // Step 4 — Insert into applications
+    const ref = genRef()
     const skills = form.skills
       ? form.skills.split(',').map(s => s.trim()).filter(Boolean)
       : []
@@ -292,8 +324,9 @@ function ApplyModal({ job, onClose, onSuccess }) {
       candidate_gender: form.candidate_gender,
       years_experience: form.years_experience ? parseInt(form.years_experience) : null,
       candidate_school: form.candidate_school || null,
-      cv_text,
-      cv_file_url,
+      cv_text: anonymisedCV,   // anonymised — what the AI reads
+      original_cv: rawCVText,  // original — shown when blind OFF
+      cv_file_url,             // PDF download URL
       skills,
       is_blinded: true,
       source: 'careers_portal',
