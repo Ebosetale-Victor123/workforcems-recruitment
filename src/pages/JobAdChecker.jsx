@@ -1,10 +1,6 @@
 import { useState, useRef } from 'react'
 import TopBar from '../components/layout/TopBar'
 import { Copy, Check, Upload } from 'lucide-react'
-import * as pdfjsLib from 'pdfjs-dist'
-
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
 
 const s = {
   page: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 },
@@ -108,16 +104,16 @@ function scoreDescription(score) {
   return 'High bias — rewrite recommended'
 }
 
-async function extractPDFText(file) {
-  const arrayBuffer = await file.arrayBuffer()
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-  let fullText = ''
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i)
-    const content = await page.getTextContent()
-    fullText += content.items.map(item => item.str).join(' ') + '\n'
-  }
-  return fullText
+const readPDFAsBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const base64 = e.target.result.split(',')[1]
+      resolve(base64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 function formatBytes(bytes) {
@@ -128,22 +124,22 @@ function formatBytes(bytes) {
 
 export default function JobAdChecker() {
   const [mode, setMode] = useState('text') // 'text' | 'pdf'
-  const [text, setText] = useState('')
+  const [textInput, setTextInput] = useState('')
   const [pdfFile, setPdfFile] = useState(null)
   const [dragOver, setDragOver] = useState(false)
-  const [loadingPhase, setLoadingPhase] = useState(null) // null | 'reading' | 'analysing'
+  const [loading, setLoading] = useState(false)
+  const [loadingText, setLoadingText] = useState('')
   const [result, setResult] = useState(null)
-  const [err, setErr] = useState(null)
+  const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
   const fileInputRef = useRef(null)
 
-  const isLoading = loadingPhase !== null
-  const canAnalyse = mode === 'text' ? text.trim().length > 0 : pdfFile !== null
+  const canAnalyse = mode === 'text' ? textInput.trim().length > 0 : pdfFile !== null
 
   const handleFile = (file) => {
     if (!file || file.type !== 'application/pdf') return
     setPdfFile(file)
-    setErr(null)
+    setError(null)
   }
 
   const handleDrop = (e) => {
@@ -152,58 +148,120 @@ export default function JobAdChecker() {
     handleFile(e.dataTransfer.files[0])
   }
 
-  const analyse = async () => {
-    if (!canAnalyse) return
-    setLoadingPhase(mode === 'pdf' ? 'reading' : 'analysing')
-    setErr(null)
+  const analyseJobAd = async () => {
+    if (!pdfFile && !textInput.trim()) return
+
+    setLoading(true)
+    setLoadingText('Analysing job description...')
+    setError(null)
     setResult(null)
 
-    let content = text
-    if (mode === 'pdf') {
-      try {
-        content = await extractPDFText(pdfFile)
-      } catch (e) {
-        setErr('Failed to read PDF: ' + e.message)
-        setLoadingPhase(null)
-        return
-      }
-      setLoadingPhase('analysing')
-    }
-
-    const groqKey = import.meta.env.VITE_GROQ_API_KEY
     try {
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${groqKey}`,
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert in inclusive hiring language. Analyse the job description for biased, exclusionary, or gendered language. Return ONLY valid JSON with no markdown: {"biasedPhrases": [{"phrase": string, "reason": string, "suggestion": string}], "overallScore": number 0-100, "rewrittenJD": string, "summary": string}`,
-            },
-            { role: 'user', content },
-          ],
-          temperature: 0.3,
-        }),
-      })
+      let messageContent
 
-      if (!res.ok) {
-        const body = await res.text()
-        throw new Error(`Groq API error ${res.status}: ${body}`)
+      if (mode === 'pdf' && pdfFile) {
+        setLoadingText('Reading PDF...')
+        const base64 = await readPDFAsBase64(pdfFile)
+
+        // Send as multipart message with base64 file
+        // Since Groq may not support document blocks directly,
+        // extract text first using this binary-safe approach:
+
+        // Read as ArrayBuffer and extract text manually
+        const arrayBuffer = await pdfFile.arrayBuffer()
+        const bytes = new Uint8Array(arrayBuffer)
+
+        // Convert bytes to string safely
+        let rawText = ''
+        for (let i = 0; i < bytes.length; i++) {
+          const byte = bytes[i]
+          // Only include printable ASCII and common chars
+          if (byte >= 32 && byte <= 126) {
+            rawText += String.fromCharCode(byte)
+          } else if (byte === 10 || byte === 13) {
+            rawText += ' '
+          }
+        }
+
+        // Extract readable text segments (PDF text is between
+        // parentheses in the binary stream)
+        const textMatches = rawText.match(/\(([^)]{2,})\)/g) || []
+        const extractedText = textMatches
+          .map(m => m.slice(1, -1))
+          .filter(s => /[a-zA-Z]{2,}/.test(s))
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+
+        if (!extractedText || extractedText.length < 50) {
+          throw new Error(
+            'Could not extract readable text from this PDF. ' +
+            'Please try "Paste Text" mode and copy the job ' +
+            'description text manually.'
+          )
+        }
+
+        messageContent = extractedText
+        setLoadingText('Analysing for bias...')
+
+      } else {
+        messageContent = textInput.trim()
       }
 
-      const data = await res.json()
+      // Call Groq API with extracted text
+      const response = await fetch(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'llama-3.1-8b-instant',
+            max_tokens: 1000,
+            messages: [
+              {
+                role: 'system',
+                content: `You are an expert in inclusive hiring language.
+Analyse the job description for biased, exclusionary, or gendered language.
+Return ONLY valid JSON with no markdown backticks, no explanation,
+no text before or after the JSON object:
+{"biasedPhrases":[{"phrase":"string","reason":"string","suggestion":"string"}],"overallScore":0,"rewrittenJD":"string","summary":"string"}`,
+              },
+              {
+                role: 'user',
+                content: `Analyse this job description for bias:\n\n${messageContent}`,
+              },
+            ],
+          }),
+        }
+      )
+
+      const data = await response.json()
       const raw = data.choices?.[0]?.message?.content || ''
-      const parsed = JSON.parse(raw)
+
+      // Strip any markdown backticks if present
+      const cleaned = raw
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim()
+
+      const parsed = JSON.parse(cleaned)
       setResult(parsed)
-    } catch (e) {
-      setErr(e.message)
+
+    } catch (err) {
+      if (err.message.includes('Could not extract')) {
+        setError(err.message)
+      } else if (err instanceof SyntaxError) {
+        setError('AI returned invalid response. Please try again.')
+      } else {
+        setError('Analysis failed: ' + err.message)
+      }
+    } finally {
+      setLoading(false)
+      setLoadingText('')
     }
-    setLoadingPhase(null)
   }
 
   const copyRewrite = () => {
@@ -212,8 +270,6 @@ export default function JobAdChecker() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  const loadingLabel = loadingPhase === 'reading' ? 'Reading PDF…' : 'Analysing…'
 
   return (
     <div style={s.page}>
@@ -224,16 +280,16 @@ export default function JobAdChecker() {
         <div style={s.layout}>
           <div style={s.leftPanel}>
             <div style={s.toggleRow}>
-              <button style={s.toggleBtn(mode === 'text')} onClick={() => setMode('text')}>Paste Text</button>
-              <button style={s.toggleBtn(mode === 'pdf')} onClick={() => setMode('pdf')}>Upload PDF</button>
+              <button type="button" style={s.toggleBtn(mode === 'text')} onClick={() => setMode('text')}>Paste Text</button>
+              <button type="button" style={s.toggleBtn(mode === 'pdf')} onClick={() => setMode('pdf')}>Upload PDF</button>
             </div>
 
             {mode === 'text' ? (
               <textarea
                 style={s.textarea}
                 placeholder="Paste your job description here…"
-                value={text}
-                onChange={e => setText(e.target.value)}
+                value={textInput}
+                onChange={e => setTextInput(e.target.value)}
               />
             ) : (
               <div
@@ -262,14 +318,15 @@ export default function JobAdChecker() {
               </div>
             )}
 
-            {err && <div style={s.error}>{err}</div>}
+            {error && <div style={s.error}>{error}</div>}
             <button
-              style={s.analyseBtn(isLoading)}
-              onClick={analyse}
-              disabled={isLoading || !canAnalyse}
+              type="button"
+              style={s.analyseBtn(loading)}
+              onClick={analyseJobAd}
+              disabled={loading || !canAnalyse}
             >
-              {isLoading && <Spinner />}
-              {isLoading ? loadingLabel : 'Analyse for Bias'}
+              {loading && <Spinner />}
+              {loading ? loadingText || 'Analysing...' : 'Analyse for Bias'}
             </button>
           </div>
 
@@ -309,7 +366,7 @@ export default function JobAdChecker() {
                   <>
                     <div style={s.sectionTitle}>Rewritten Job Description</div>
                     <div style={s.rewriteBox}>
-                      <button style={s.copyBtn} onClick={copyRewrite}>
+                      <button type="button" style={s.copyBtn} onClick={copyRewrite}>
                         {copied ? <Check size={12} /> : <Copy size={12} />}
                         {copied ? 'Copied' : 'Copy'}
                       </button>

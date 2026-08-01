@@ -133,13 +133,14 @@ function KanbanCard({ app, onMove }) {
 export default function ApplicationTracker() {
   const { applications, loading, error, updateStage } = useApplications()
 
-  const byStage = {}
-  STAGES.forEach(st => { byStage[st] = [] })
-  applications.forEach(app => {
-    const st = app.stage?.toLowerCase() || 'applied'
-    if (byStage[st]) byStage[st].push(app)
-    else byStage['applied'].push(app)
-  })
+  const columns = {
+    applied: applications.filter(a => a.stage === 'applied'),
+    screening: applications.filter(a => a.stage === 'screening'),
+    interview: applications.filter(a => a.stage === 'interview'),
+    offered: applications.filter(a => a.stage === 'offered'),
+    hired: applications.filter(a => a.stage === 'hired'),
+    rejected: applications.filter(a => a.stage === 'rejected'),
+  }
 
   return (
     <div style={s.page}>
@@ -154,9 +155,9 @@ export default function ApplicationTracker() {
               <div key={stage} style={s.column}>
                 <div style={s.colHeader}>
                   <span style={s.colTitle}>{STAGE_LABELS[stage]}</span>
-                  <span style={s.colCount}>{byStage[stage].length}</span>
+                  <span style={s.colCount}>{columns[stage].length}</span>
                 </div>
-                {byStage[stage].map(app => (
+                {columns[stage].map(app => (
                   <KanbanCard key={app.id} app={app} onMove={updateStage} />
                 ))}
               </div>

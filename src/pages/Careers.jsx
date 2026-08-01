@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { MapPin, Briefcase } from 'lucide-react'
+import { MapPin, Briefcase, CheckCircle } from 'lucide-react'
 
 const s = {
   page: { minHeight: '100vh', background: '#000000', color: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif' },
@@ -13,6 +13,11 @@ const s = {
   headerBrand: { display: 'flex', flexDirection: 'column' },
   brandName: { fontSize: '16px', fontWeight: '700', color: '#ffffff', lineHeight: 1.2 },
   brandSub: { fontSize: '12px', color: '#22c55e', lineHeight: 1.2 },
+  trackHeaderBtn: {
+    background: 'transparent', border: '1px solid #2a2a2a', color: '#ffffff',
+    borderRadius: '8px', padding: '10px 20px', fontSize: '14px',
+    cursor: 'pointer', fontFamily: 'inherit',
+  },
   hero: { padding: '60px 40px 40px', maxWidth: '900px', margin: '0 auto' },
   heroTitle: { fontSize: '48px', fontWeight: '700', color: '#ffffff', marginBottom: '12px', lineHeight: 1.1 },
   heroSub: { fontSize: '18px', color: '#9ca3af' },
@@ -103,12 +108,85 @@ const s = {
     fontWeight: '700', fontSize: '15px', cursor: 'not-allowed', fontFamily: 'inherit',
   },
   formError: { fontSize: '13px', color: '#ef4444', marginBottom: '12px' },
-  toast: {
-    position: 'fixed', bottom: '24px', right: '24px',
-    background: '#22c55e', color: '#000000',
-    padding: '16px 24px', borderRadius: '8px',
-    fontWeight: '600', fontSize: '14px', zIndex: 9999,
-    boxShadow: '0 4px 20px rgba(34,197,94,0.4)',
+  fieldError: { color: '#ef4444', fontSize: '12px', marginTop: '4px' },
+  requiredMark: { color: '#ef4444', marginLeft: '2px' },
+
+  successOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+    zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  successModal: {
+    background: '#141414', border: '1px solid #22c55e',
+    borderRadius: '16px', padding: '40px', width: '480px',
+    position: 'fixed', top: '50%', left: '50%',
+    transform: 'translate(-50%, -50%)', textAlign: 'center',
+  },
+  successIconWrap: {
+    width: '64px', height: '64px', borderRadius: '50%',
+    background: 'rgba(34,197,94,0.15)', border: '2px solid #22c55e',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    margin: '0 auto 20px',
+  },
+  successHeading: { fontSize: '24px', fontWeight: '700', color: '#ffffff', marginBottom: '8px' },
+  successSub: { fontSize: '14px', color: '#9ca3af', marginBottom: '32px' },
+  refBox: {
+    background: '#0a0a0a', border: '1px solid #22c55e',
+    borderRadius: '12px', padding: '24px', marginBottom: '12px',
+  },
+  refLabel: { fontSize: '11px', color: '#6b7280', letterSpacing: '0.1em', marginBottom: '8px' },
+  refCode: {
+    fontSize: '36px', fontWeight: '800', color: '#22c55e',
+    letterSpacing: '0.05em', fontFamily: 'monospace',
+  },
+  warnBox: {
+    fontSize: '13px', color: '#f59e0b', marginBottom: '24px',
+    background: 'rgba(245,158,11,0.1)', borderRadius: '8px',
+    padding: '12px', border: '1px solid rgba(245,158,11,0.2)',
+  },
+  copyRefBtn: {
+    width: '100%', background: '#22c55e', color: '#000000', border: 'none',
+    borderRadius: '8px', padding: '12px', fontWeight: '600',
+    marginBottom: '12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px',
+  },
+  closeSuccessBtn: {
+    width: '100%', background: 'transparent', border: '1px solid #2a2a2a',
+    color: '#9ca3af', borderRadius: '8px', padding: '12px',
+    cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px',
+  },
+
+  trackModal: {
+    background: '#141414', border: '1px solid #2a2a2a',
+    borderRadius: '16px', padding: '32px', width: '440px',
+    position: 'fixed', top: '50%', left: '50%',
+    transform: 'translate(-50%, -50%)', zIndex: 9999,
+  },
+  trackHeading: { fontSize: '20px', fontWeight: '700', color: '#ffffff', paddingRight: '32px' },
+  trackSub: { fontSize: '14px', color: '#9ca3af', marginBottom: '24px', marginTop: '4px' },
+  trackInput: {
+    background: '#1a1a1a', border: '1px solid #2a2a2a',
+    borderRadius: '8px', padding: '12px 16px', color: '#ffffff',
+    width: '100%', fontSize: '15px', textTransform: 'uppercase',
+    letterSpacing: '0.05em', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+  },
+  trackBtn: {
+    width: '100%', background: '#22c55e', color: '#000000', border: 'none',
+    borderRadius: '8px', padding: '13px', fontWeight: '700',
+    marginTop: '12px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px',
+  },
+  trackResultCard: {
+    background: '#0a0a0a', border: '1px solid #2a2a2a',
+    borderRadius: '12px', padding: '20px', marginTop: '16px',
+  },
+  trackRow: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '8px 0', fontSize: '13px',
+  },
+  trackRowLabel: { color: '#9ca3af' },
+  trackRowValue: { color: '#ffffff', fontWeight: '600' },
+  trackErrorCard: {
+    background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444',
+    borderRadius: '8px', padding: '16px', color: '#ef4444',
+    textAlign: 'center', marginTop: '16px', fontSize: '13px',
   },
 }
 
@@ -126,9 +204,18 @@ function genRef() {
 
 const EMPTY_FORM = {
   candidate_name: '', candidate_email: '', candidate_phone: '',
-  candidate_age: '', candidate_gender: 'Prefer not to say',
+  candidate_age: '', candidate_gender: '',
   years_experience: '', candidate_school: '',
   cv_text: '', skills: '',
+}
+
+const REQUIRED_LABELS = {
+  candidate_name: 'Full Name',
+  candidate_email: 'Email Address',
+  candidate_phone: 'Phone Number',
+  candidate_age: 'Age',
+  years_experience: 'Years of Experience',
+  candidate_school: 'University / School',
 }
 
 function ApplyModal({ job, onClose, onSuccess }) {
@@ -137,17 +224,39 @@ function ApplyModal({ job, onClose, onSuccess }) {
   const [pdfFile, setPdfFile] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [formErr, setFormErr] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
 
-  const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => {
+    setForm(f => ({ ...f, [k]: e.target.value }))
+    setFieldErrors(fe => (fe[k] ? { ...fe, [k]: undefined } : fe))
+  }
 
   const handlePdfFile = (file) => {
     if (!file || file.type !== 'application/pdf') return
     setPdfFile(file)
+    setFieldErrors(fe => (fe.cv ? { ...fe, cv: undefined } : fe))
+  }
+
+  const validate = () => {
+    const errors = {}
+    if (!form.candidate_name.trim()) errors.candidate_name = 'Required'
+    if (!form.candidate_email.trim()) errors.candidate_email = 'Required'
+    if (!form.candidate_phone.trim()) errors.candidate_phone = 'Required'
+    if (!form.candidate_age) errors.candidate_age = 'Required'
+    if (!form.years_experience) errors.years_experience = 'Required'
+    if (!form.candidate_gender) errors.candidate_gender = 'Required'
+    if (!form.skills.trim()) errors.skills = 'Required'
+    if (cvMode === 'text' && !form.cv_text.trim()) errors.cv = 'Please paste your CV text'
+    if (cvMode === 'pdf' && !pdfFile) errors.cv = 'Please upload your CV PDF'
+    return errors
   }
 
   const handleSubmit = async () => {
-    if (!form.candidate_name.trim()) { setFormErr('Full name is required.'); return }
-    if (!form.candidate_email.trim()) { setFormErr('Email is required.'); return }
+    const errors = validate()
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
+      return
+    }
     setSubmitting(true)
     setFormErr(null)
 
@@ -200,7 +309,7 @@ function ApplyModal({ job, onClose, onSuccess }) {
     }
 
     setSubmitting(false)
-    onSuccess(ref)
+    onSuccess(ref, job.title)
   }
 
   return (
@@ -216,45 +325,60 @@ function ApplyModal({ job, onClose, onSuccess }) {
         {formErr && <div style={s.formError}>{formErr}</div>}
 
         {[
-          ['candidate_name', 'Full Name *', 'text'],
-          ['candidate_email', 'Email Address *', 'email'],
-          ['candidate_phone', 'Phone Number', 'text'],
-          ['candidate_age', 'Age', 'number'],
-          ['years_experience', 'Years of Experience', 'number'],
-          ['candidate_school', 'University / School', 'text'],
-        ].map(([key, lbl, type]) => (
+          ['candidate_name', 'text'],
+          ['candidate_email', 'email'],
+          ['candidate_phone', 'text'],
+          ['candidate_age', 'number'],
+          ['years_experience', 'number'],
+          ['candidate_school', 'text'],
+        ].map(([key, type]) => (
           <div key={key} style={s.formGroup}>
-            <label style={s.label}>{lbl}</label>
-            <input style={s.input} type={type} value={form[key]} onChange={set(key)} />
+            <label style={s.label}>
+              {REQUIRED_LABELS[key]}
+              {key !== 'candidate_school' && <span style={s.requiredMark}>*</span>}
+            </label>
+            <input
+              style={fieldErrors[key] ? { ...s.input, borderColor: '#ef4444' } : s.input}
+              type={type}
+              value={form[key]}
+              onChange={set(key)}
+            />
+            {fieldErrors[key] && <div style={s.fieldError}>{fieldErrors[key]}</div>}
           </div>
         ))}
 
         <div style={s.formGroup}>
-          <label style={s.label}>Gender</label>
-          <select style={s.select} value={form.candidate_gender} onChange={set('candidate_gender')}>
-            <option>Prefer not to say</option>
+          <label style={s.label}>Gender<span style={s.requiredMark}>*</span></label>
+          <select
+            style={fieldErrors.candidate_gender ? { ...s.select, borderColor: '#ef4444' } : s.select}
+            value={form.candidate_gender}
+            onChange={set('candidate_gender')}
+          >
+            <option value="">Select Gender</option>
             <option>Male</option>
             <option>Female</option>
             <option>Non-binary</option>
+            <option>Prefer not to say</option>
           </select>
+          {fieldErrors.candidate_gender && <div style={s.fieldError}>{fieldErrors.candidate_gender}</div>}
         </div>
 
         <div style={s.formGroup}>
-          <label style={s.label}>Upload your CV</label>
+          <label style={s.label}>Upload your CV<span style={s.requiredMark}>*</span></label>
           <div style={s.cvToggleRow}>
             <button style={s.cvToggle(cvMode === 'text')} onClick={() => setCvMode('text')}>Paste CV Text</button>
             <button style={s.cvToggle(cvMode === 'pdf')} onClick={() => setCvMode('pdf')}>Upload PDF</button>
           </div>
           {cvMode === 'text' ? (
             <textarea
-              style={s.textarea}
+              style={fieldErrors.cv ? { ...s.textarea, borderColor: '#ef4444' } : s.textarea}
               placeholder="Paste your CV or cover letter here..."
               value={form.cv_text}
               onChange={set('cv_text')}
             />
           ) : (
             <div
-              style={s.dropZone}
+              style={fieldErrors.cv ? { ...s.dropZone, borderColor: '#ef4444' } : s.dropZone}
               onClick={() => document.getElementById('careers-pdf-input').click()}
             >
               <input
@@ -277,17 +401,19 @@ function ApplyModal({ job, onClose, onSuccess }) {
               )}
             </div>
           )}
+          {fieldErrors.cv && <div style={s.fieldError}>{fieldErrors.cv}</div>}
         </div>
 
         <div style={s.formGroup}>
-          <label style={s.label}>Skills</label>
+          <label style={s.label}>Skills<span style={s.requiredMark}>*</span></label>
           <input
-            style={s.input}
+            style={fieldErrors.skills ? { ...s.input, borderColor: '#ef4444' } : s.input}
             type="text"
             placeholder="e.g. React, Node.js, Python — comma separated"
             value={form.skills}
             onChange={set('skills')}
           />
+          {fieldErrors.skills && <div style={s.fieldError}>{fieldErrors.skills}</div>}
         </div>
 
         <button
@@ -297,6 +423,126 @@ function ApplyModal({ job, onClose, onSuccess }) {
         >
           {submitting ? 'Submitting…' : 'Submit Application'}
         </button>
+      </div>
+    </div>
+  )
+}
+
+function SuccessModal({ info, onClose }) {
+  const [copied, setCopied] = useState(false)
+
+  const copyRef = () => {
+    navigator.clipboard.writeText(info.ref)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div style={s.successOverlay}>
+      <div style={s.successModal}>
+        <div style={s.successIconWrap}>
+          <CheckCircle size={32} color="#22c55e" />
+        </div>
+        <div style={s.successHeading}>Application Submitted!</div>
+        <div style={s.successSub}>Your application for {info.jobTitle} has been received.</div>
+
+        <div style={s.refBox}>
+          <div style={s.refLabel}>YOUR APPLICATION REFERENCE</div>
+          <div style={s.refCode}>{info.ref}</div>
+        </div>
+
+        <div style={s.warnBox}>
+          ⚠️ Save this reference code somewhere safe. You will need it to track your application status.
+        </div>
+
+        <button style={s.copyRefBtn} onClick={copyRef}>
+          {copied ? 'Copied ✓' : 'Copy Reference'}
+        </button>
+        <button style={s.closeSuccessBtn} onClick={onClose}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+const STAGE_COLORS = {
+  applied: '#9ca3af',
+  screening: '#f97316',
+  interview: '#3b82f6',
+  offered: '#a855f7',
+  hired: '#22c55e',
+  rejected: '#ef4444',
+}
+
+function TrackingModal({ onClose }) {
+  const [refInput, setRefInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [notFound, setNotFound] = useState(false)
+
+  const handleTrack = async () => {
+    const cleaned = refInput.toUpperCase().trim()
+    if (!cleaned) return
+    setLoading(true)
+    setResult(null)
+    setNotFound(false)
+
+    const { data, error } = await supabase
+      .from('applications')
+      .select('application_reference, applicant_role, stage, blind_score, created_at, is_blinded')
+      .eq('application_reference', cleaned)
+      .single()
+
+    setLoading(false)
+    if (error || !data) {
+      setNotFound(true)
+    } else {
+      setResult(data)
+    }
+  }
+
+  return (
+    <div style={s.overlay} onClick={onClose}>
+      <div style={s.trackModal} onClick={e => e.stopPropagation()}>
+        <button style={s.closeBtn} onClick={onClose}>×</button>
+        <div style={s.trackHeading}>Track Your Application</div>
+        <div style={s.trackSub}>Enter your reference code to check your status.</div>
+
+        <input
+          style={s.trackInput}
+          placeholder="e.g. WMS-L3E5L6"
+          value={refInput}
+          onChange={e => setRefInput(e.target.value)}
+        />
+        <button style={s.trackBtn} onClick={handleTrack} disabled={loading}>
+          {loading ? 'Checking…' : 'Track Status'}
+        </button>
+
+        {result && (
+          <div style={s.trackResultCard}>
+            <div style={s.trackRow}>
+              <span style={s.trackRowLabel}>Role Applied For</span>
+              <span style={s.trackRowValue}>{result.applicant_role || '—'}</span>
+            </div>
+            <div style={s.trackRow}>
+              <span style={s.trackRowLabel}>Current Stage</span>
+              <span style={{ ...s.trackRowValue, color: STAGE_COLORS[result.stage?.toLowerCase()] || '#9ca3af' }}>
+                {result.stage ? result.stage.charAt(0).toUpperCase() + result.stage.slice(1) : '—'}
+              </span>
+            </div>
+            <div style={s.trackRow}>
+              <span style={s.trackRowLabel}>Date Applied</span>
+              <span style={s.trackRowValue}>{formatDate(result.created_at)}</span>
+            </div>
+            <div style={s.trackRow}>
+              <span style={s.trackRowLabel}>Blind Score</span>
+              <span style={s.trackRowValue}>{result.blind_score != null ? result.blind_score : 'Pending screening'}</span>
+            </div>
+          </div>
+        )}
+
+        {notFound && (
+          <div style={s.trackErrorCard}>No application found with that reference code.</div>
+        )}
       </div>
     </div>
   )
@@ -337,7 +583,8 @@ export default function Careers() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedJob, setSelectedJob] = useState(null)
-  const [toast, setToast] = useState(null)
+  const [successInfo, setSuccessInfo] = useState(null)
+  const [trackModalOpen, setTrackModalOpen] = useState(false)
 
   useEffect(() => {
     supabase
@@ -351,10 +598,9 @@ export default function Careers() {
       })
   }, [])
 
-  const handleSuccess = (ref) => {
+  const handleSuccess = (ref, jobTitle) => {
     setSelectedJob(null)
-    setToast(`Application submitted! Your reference is ${ref}`)
-    setTimeout(() => setToast(null), 5000)
+    setSuccessInfo({ ref, jobTitle })
   }
 
   return (
@@ -367,6 +613,7 @@ export default function Careers() {
             <span style={s.brandSub}>Recruitment</span>
           </div>
         </div>
+        <button style={s.trackHeaderBtn} onClick={() => setTrackModalOpen(true)}>Track Application</button>
       </header>
 
       <div style={s.hero}>
@@ -394,7 +641,13 @@ export default function Careers() {
         />
       )}
 
-      {toast && <div style={s.toast}>{toast}</div>}
+      {successInfo && (
+        <SuccessModal info={successInfo} onClose={() => setSuccessInfo(null)} />
+      )}
+
+      {trackModalOpen && (
+        <TrackingModal onClose={() => setTrackModalOpen(false)} />
+      )}
     </div>
   )
 }

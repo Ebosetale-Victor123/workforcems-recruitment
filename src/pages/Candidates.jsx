@@ -2,6 +2,7 @@ import { useState } from 'react'
 import TopBar from '../components/layout/TopBar'
 import { StageBadge } from '../components/ui/Badge'
 import { useApplications } from '../hooks/useApplications'
+import { Trash2 } from 'lucide-react'
 
 const STAGES = ['All', 'Applied', 'Screening', 'Interview', 'Offered', 'Hired', 'Rejected']
 
@@ -50,6 +51,40 @@ const s = {
     background: 'transparent', border: '1px solid #3a3a3a',
     borderRadius: '6px', padding: '5px 14px', color: '#9ca3af',
     fontSize: '12px', cursor: 'pointer',
+  },
+  deleteBtn: {
+    background: 'transparent', border: '1px solid #3a3a3a',
+    borderRadius: '6px', padding: '6px 8px', cursor: 'pointer',
+    color: '#ef4444', marginLeft: '8px', display: 'inline-flex',
+    alignItems: 'center',
+  },
+  infoNote: { fontSize: '12px', color: '#6b7280', marginBottom: '16px' },
+  confirmOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+    zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  confirmModal: {
+    background: '#141414', border: '1px solid #2a2a2a',
+    borderRadius: '12px', padding: '24px',
+    position: 'fixed', top: '50%', left: '50%',
+    transform: 'translate(-50%, -50%)', zIndex: 1000, width: '360px',
+  },
+  confirmIconWrap: { display: 'flex', justifyContent: 'center', marginBottom: '12px' },
+  confirmHeading: { fontSize: '18px', fontWeight: '700', color: '#ffffff', textAlign: 'center' },
+  confirmBody: { fontSize: '14px', color: '#9ca3af', textAlign: 'center', marginTop: '8px' },
+  confirmActions: { display: 'flex', gap: '12px', marginTop: '20px' },
+  confirmCancelBtn: {
+    background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#ffffff',
+    borderRadius: '8px', padding: '10px 20px', flex: 1, cursor: 'pointer',
+  },
+  confirmDeleteBtn: {
+    background: '#ef4444', border: 'none', color: '#ffffff',
+    borderRadius: '8px', padding: '10px 20px', flex: 1, fontWeight: '600', cursor: 'pointer',
+  },
+  toast: {
+    position: 'fixed', bottom: '24px', right: '24px',
+    background: '#ef4444', color: '#ffffff',
+    padding: '12px 20px', borderRadius: '8px', zIndex: 9999,
   },
   error: {
     background: '#2a0a0a', border: '1px solid #ef4444',
@@ -173,14 +208,43 @@ function CandidateDrawer({ app, onClose }) {
   )
 }
 
+function DeleteConfirmModal({ candidate, onCancel, onConfirm }) {
+  return (
+    <div style={s.confirmOverlay} onClick={onCancel}>
+      <div style={s.confirmModal} onClick={e => e.stopPropagation()}>
+        <div style={s.confirmIconWrap}>
+          <Trash2 size={24} color="#ef4444" />
+        </div>
+        <div style={s.confirmHeading}>Delete Candidate?</div>
+        <div style={s.confirmBody}>
+          This will permanently remove this application from the database. This cannot be undone.
+        </div>
+        <div style={s.confirmActions}>
+          <button style={s.confirmCancelBtn} onClick={onCancel}>Cancel</button>
+          <button style={s.confirmDeleteBtn} onClick={() => onConfirm(candidate)}>Delete</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Candidates() {
-  const { applications, loading, error } = useApplications()
+  const { applications, loading, error, deleteApplication } = useApplications()
   const [stageFilter, setStageFilter] = useState('All')
   const [minScore, setMinScore] = useState(0)
   const [selectedApp, setSelectedApp] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  const handleConfirmDelete = async (candidate) => {
+    await deleteApplication(candidate.id)
+    setDeleteTarget(null)
+    setToast('Candidate removed')
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const filtered = applications
-    .filter(a => stageFilter === 'All' || a.stage?.toLowerCase() === stageFilter.toLowerCase())
+    .filter(a => stageFilter === 'All' || a.stage === stageFilter.toLowerCase())
     .filter(a => minScore === 0 || (a.blind_score != null && a.blind_score >= minScore))
 
   return (
@@ -213,6 +277,8 @@ export default function Candidates() {
             <span style={s.matchCount}>{filtered.length} candidate{filtered.length !== 1 ? 's' : ''} match</span>
           </div>
         </div>
+
+        <div style={s.infoNote}>⚡ Rejected applications are automatically removed after 3 days</div>
 
         {loading ? (
           <div style={s.loading}>Loading candidates…</div>
@@ -267,6 +333,9 @@ export default function Candidates() {
                         <td style={s.tdSec}>{formatDate(app.created_at)}</td>
                         <td style={s.td}>
                           <button style={s.viewBtn} onClick={() => setSelectedApp(app)}>View</button>
+                          <button style={s.deleteBtn} onClick={() => setDeleteTarget(app)}>
+                            <Trash2 size={14} />
+                          </button>
                         </td>
                       </tr>
                     )
@@ -279,6 +348,14 @@ export default function Candidates() {
       </div>
 
       {selectedApp && <CandidateDrawer app={selectedApp} onClose={() => setSelectedApp(null)} />}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          candidate={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleConfirmDelete}
+        />
+      )}
+      {toast && <div style={s.toast}>{toast}</div>}
     </div>
   )
 }

@@ -66,6 +66,15 @@ function formatDate(d) {
   })
 }
 
+function displayRef(app) {
+  if (app.application_reference &&
+      app.application_reference !== '30000000' &&
+      app.application_reference.trim() !== '') {
+    return app.application_reference
+  }
+  return 'ID-' + app.id.slice(0, 8).toUpperCase()
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState({ openRoles: 0, totalApplicants: 0, blindScreened: 0 })
   const [recent, setRecent] = useState([])
@@ -164,7 +173,7 @@ export default function Dashboard() {
                         onMouseEnter={e => e.currentTarget.style.background = '#1c1c1c'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
-                        <td style={styles.tdSec}>{app.application_reference || app.id.slice(0, 8)}</td>
+                        <td style={styles.tdSec}>{displayRef(app)}</td>
                         <td style={styles.td}>{app.jobs?.title || app.applicant_role || '—'}</td>
                         <td style={styles.td}><StageBadge stage={app.stage} /></td>
                         <td style={styles.td}>
