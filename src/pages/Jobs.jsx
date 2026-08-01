@@ -11,7 +11,7 @@ const FILTERS = ['All', 'Open', 'Closed', 'Filled', 'Draft']
 const s = {
   page: { flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 },
   content: { padding: '32px', flex: 1, overflowY: 'auto' },
-  statsRow: { display: 'flex', gap: '16px', marginBottom: '28px' },
+  statsRow: { display: 'flex', gap: '16px', marginBottom: '28px', flexWrap: 'wrap', alignItems: 'stretch' },
   pillRow: { display: 'flex', gap: '8px', marginBottom: '24px', flexWrap: 'wrap' },
   pill: (active) => ({
     border: `1px solid ${active ? '#ffffff' : '#3a3a3a'}`,

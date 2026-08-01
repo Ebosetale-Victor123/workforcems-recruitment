@@ -1,30 +1,17 @@
-const styles = {
-  card: {
-    background: '#141414',
-    border: '1px solid #2a2a2a',
-    borderRadius: '12px',
-    padding: '24px',
-    flex: 1,
-  },
-  number: (color) => ({
-    fontSize: '32px',
-    fontWeight: '700',
-    color: color || '#ffffff',
-    lineHeight: 1.1,
-    marginBottom: '6px',
-  }),
-  label: {
-    fontSize: '13px',
-    color: '#9ca3af',
-    fontWeight: '400',
-  },
-}
-
-export default function StatCard({ label, value, color }) {
+export default function StatCard({ label, value, color, style, className = '' }) {
   return (
-    <div style={styles.card}>
-      <div style={styles.number(color)}>{value ?? '—'}</div>
-      <div style={styles.label}>{label}</div>
+    <div
+      className={`metric-card ${className}`.trim()}
+      style={{
+        borderLeft: `4px solid ${color || 'var(--border-color)'}`,
+        flex: '1 1 220px',
+        minWidth: '180px',
+        width: '100%',
+        ...style,
+      }}
+    >
+      <strong style={color ? { color } : undefined}>{value ?? '—'}</strong>
+      <p>{label}</p>
     </div>
   )
 }

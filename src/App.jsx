@@ -11,9 +11,9 @@ import Careers from './pages/Careers'
 
 function MainLayout() {
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#000' }}>
+    <div style={{ minHeight: '100vh', background: '#000', overflowX: 'hidden' }}>
       <Sidebar />
-      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginLeft: 'var(--sidebar-width)', width: 'calc(100vw - var(--sidebar-width))', minHeight: '100vh', overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />

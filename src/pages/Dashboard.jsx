@@ -10,7 +10,7 @@ const styles = {
   greeting: { marginBottom: '32px' },
   greetingTitle: { fontSize: '24px', fontWeight: '700', color: '#ffffff', marginBottom: '4px' },
   greetingDate: { fontSize: '14px', color: '#9ca3af' },
-  statsRow: { display: 'flex', gap: '16px', marginBottom: '32px' },
+  statsRow: { display: 'flex', gap: '16px', marginBottom: '32px', flexWrap: 'wrap', alignItems: 'stretch' },
   sectionTitle: { fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '16px' },
   tableWrap: {
     background: '#141414',
