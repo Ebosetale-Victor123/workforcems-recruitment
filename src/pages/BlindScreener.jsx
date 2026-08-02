@@ -408,7 +408,6 @@ export default function BlindScreener() {
   const [selectedId, setSelectedId] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const [selectedApp, setSelectedApp] = useState(null)
-  const [selectedJobId, setSelectedJobId] = useState('')
   const [blindMode, setBlindMode] = useState(true)
 
   const [analysing, setAnalysing] = useState(false)
@@ -427,8 +426,7 @@ export default function BlindScreener() {
     .slice()
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 
-  const openJobs = jobs.filter(j => j.status === 'open')
-  const selectedRole = openJobs.find(j => j.id === selectedJobId)
+  const candidateJob = selectedApp ? jobs.find(j => j.id === selectedApp.job_id) : null
 
   const handleSelectCandidate = (id) => {
     setSelectedId(id)
@@ -440,7 +438,7 @@ export default function BlindScreener() {
   }
 
   const runAnalysis = async () => {
-    if (!selectedApp || !selectedJobId) return
+    if (!selectedApp) return
     setAnalysing(true)
     setAnalysisError(null)
     setResult(null)
@@ -448,6 +446,13 @@ export default function BlindScreener() {
     const cvForAI = blindMode
       ? (selectedApp.cv_text || '')
       : (selectedApp.original_cv || selectedApp.cv_text || '')
+
+    const jobForScoring = candidateJob || {
+      title: selectedApp.applicant_role,
+      department: '',
+      description: '',
+      requirements: '',
+    }
 
     try {
       const parsed = await callGroq([
@@ -457,7 +462,7 @@ export default function BlindScreener() {
         },
         {
           role: 'user',
-          content: `Role: ${selectedRole?.title || 'the specified role'}. CV: ${cvForAI}`,
+          content: `Role: ${jobForScoring.title || 'the specified role'}. CV: ${cvForAI}`,
         },
       ], 1000)
 
@@ -561,7 +566,7 @@ export default function BlindScreener() {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <TopBar title="Blind Screener" />
       <div style={s.content}>
-        <div style={s.subtitle}>Select a candidate and role to run a blind AI screen</div>
+        <div style={s.subtitle}>Select a candidate to run a blind AI screen against their applied role</div>
         {error && <div style={s.error}>{error}</div>}
 
         {loading ? (
@@ -585,20 +590,11 @@ export default function BlindScreener() {
                       <option key={c.id} value={c.id}>Candidate #{i + 1}</option>
                     ))}
                   </select>
-                </div>
-
-                <div style={s.formGroup}>
-                  <label style={s.label}>Screen Against Role</label>
-                  <select
-                    style={s.select}
-                    value={selectedJobId}
-                    onChange={e => setSelectedJobId(e.target.value)}
-                  >
-                    <option value="">Choose a role…</option>
-                    {openJobs.map(j => (
-                      <option key={j.id} value={j.id}>{j.title}</option>
-                    ))}
-                  </select>
+                  {selectedApp && (
+                    <div style={{ fontSize: '13px', color: '#9ca3af', marginTop: '8px' }}>
+                      Screening for: {candidateJob?.title || selectedApp.applicant_role || 'Unknown role'}
+                    </div>
+                  )}
                 </div>
 
                 <button type="button" style={s.toggleBtn(blindMode)} onClick={() => setBlindMode(m => !m)}>
@@ -614,18 +610,25 @@ export default function BlindScreener() {
 
                 <button
                   type="button"
-                  style={s.analyseBtn(!selectedApp || !selectedJobId || analysing)}
+                  style={s.analyseBtn(!selectedApp || analysing)}
                   onClick={runAnalysis}
-                  disabled={!selectedApp || !selectedJobId || analysing}
+                  disabled={!selectedApp || analysing}
                 >
                   {analysing ? 'Analysing…' : 'Analyse CV'}
                 </button>
 
-                {/* Feature 1 — View Original CV link */}
                 {selectedApp?.cv_file_url && (
                   <button
                     type="button"
-                    onClick={() => window.open(selectedApp.cv_file_url, '_blank')}
+                    onClick={() => {
+                      const link = document.createElement('a')
+                      link.href = selectedApp.cv_file_url
+                      link.download = `candidate-cv-${selectedApp.application_reference || selectedApp.id}.pdf`
+                      link.target = '_blank'
+                      document.body.appendChild(link)
+                      link.click()
+                      document.body.removeChild(link)
+                    }}
                     style={{
                       display: 'block', textAlign: 'center', marginTop: '8px',
                       color: '#3b82f6', fontSize: '13px', cursor: 'pointer',
@@ -633,7 +636,7 @@ export default function BlindScreener() {
                       border: 'none', padding: '4px', width: '100%',
                     }}
                   >
-                    View Original CV PDF
+                    Download Original CV
                   </button>
                 )}
 
