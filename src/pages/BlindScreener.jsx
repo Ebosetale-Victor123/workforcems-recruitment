@@ -5,7 +5,7 @@ import { useJobs } from '../hooks/useJobs'
 import { supabase } from '../lib/supabase'
 import {
   Eye, EyeOff, CheckCircle, XCircle, ThumbsUp, ThumbsDown,
-  ExternalLink, BookOpen,
+  FileText, BookOpen,
 } from 'lucide-react'
 
 const s = {
@@ -372,7 +372,7 @@ export default function BlindScreener() {
                     style={s.secondaryBtn}
                     onClick={() => window.open(selectedApp.cv_file_url, '_blank')}
                   >
-                    <ExternalLink size={14} /> View Original PDF
+                    <FileText size={16} /> View Original CV PDF
                   </button>
                 )}
 

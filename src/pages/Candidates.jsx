@@ -203,6 +203,29 @@ function CandidateDrawer({ app, onClose }) {
             </div>
           </>
         )}
+
+        {app.cv_file_url && (
+          <a
+            href={app.cv_file_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#141414',
+              border: '1px solid #2a2a2a',
+              color: '#9ca3af',
+              borderRadius: '8px',
+              padding: '10px 16px',
+              fontSize: '14px',
+              textDecoration: 'none',
+              marginTop: '12px',
+            }}
+          >
+            View CV PDF
+          </a>
+        )}
       </div>
     </div>
   )
