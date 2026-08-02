@@ -515,8 +515,8 @@ function ApplyModal({ job, onClose, onSuccess }) {
                 value={cvText}
                 onChange={e => setCvText(e.target.value)}
               />
-              <div style={{ marginTop: '4px', fontSize: '12px', color: cvCharCount >= 200 ? '#22c55e' : '#f59e0b' }}>
-                {cvCharCount >= 200 ? '✓ Minimum reached' : `${200 - cvCharCount} more characters needed`}
+              <div style={{ marginTop: '4px', fontSize: '12px', color: cvCharCount >= 500 ? '#22c55e' : '#f59e0b' }}>
+                {cvCharCount >= 500 ? '✓ Cv Extracted' : `${500 - cvCharCount} more characters needed`}
               </div>
             </div>
 

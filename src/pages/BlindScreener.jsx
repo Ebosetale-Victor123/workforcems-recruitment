@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import TopBar from '../components/layout/TopBar'
 import { useApplications } from '../hooks/useApplications'
 import { useJobs } from '../hooks/useJobs'
 import { supabase } from '../lib/supabase'
 import {
   Eye, EyeOff, CheckCircle, XCircle, ThumbsUp, ThumbsDown,
-  FileText, BookOpen,
+  BookOpen,
 } from 'lucide-react'
 
 const s = {
@@ -48,12 +48,6 @@ const s = {
     cursor: disabled ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
     marginBottom: '10px',
   }),
-  secondaryBtn: {
-    width: '100%', background: 'transparent', border: '1px solid #2a2a2a',
-    color: '#9ca3af', borderRadius: '8px', padding: '10px', fontSize: '13px',
-    cursor: 'pointer', fontFamily: 'inherit', marginBottom: '10px',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-  },
   sourceBadge: {
     display: 'inline-flex', alignItems: 'center', gap: '6px',
     background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)',
@@ -150,6 +144,8 @@ const s = {
   },
 }
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
 function scoreColor(score) {
   if (score >= 80) return '#22c55e'
   if (score >= 60) return '#f59e0b'
@@ -166,20 +162,244 @@ async function callGroq(messages, max_tokens) {
   const res = await fetch('/api/groq', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
-      max_tokens,
-      messages,
-    }),
+    body: JSON.stringify({ model: 'llama-3.1-8b-instant', max_tokens, messages }),
   })
   const data = await res.json()
-  if (!res.ok) {
-    throw new Error(data.error || `Groq proxy error ${res.status}`)
-  }
+  if (!res.ok) throw new Error(data.error || `Groq proxy error ${res.status}`)
   const raw = data.content?.[0]?.text || data.choices?.[0]?.message?.content || ''
   const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim()
   return JSON.parse(cleaned)
 }
+
+async function callGroqRaw(messages, max_tokens) {
+  const res = await fetch('/api/groq', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.1-8b-instant', max_tokens, messages }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || `Groq proxy error ${res.status}`)
+  return data.content?.[0]?.text || data.choices?.[0]?.message?.content || ''
+}
+
+function ModalSpinner({ color }) {
+  return (
+    <span style={{
+      width: '16px', height: '16px',
+      border: `2px solid #3a3a3a`,
+      borderTopColor: color || '#22c55e',
+      borderRadius: '50%', display: 'inline-block',
+      animation: 'spin 0.7s linear infinite', flexShrink: 0,
+    }} />
+  )
+}
+
+// ── Accept Modal ─────────────────────────────────────────────────────────────
+
+function AcceptModal({ candidate, candidateLabel, result, onClose, onConfirm, loading }) {
+  const [email, setEmail] = useState('')
+  const [generating, setGenerating] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    callGroqRaw([{
+      role: 'user',
+      content: `Generate a professional, warm acceptance email for a job candidate who has been shortlisted for interview.
+
+Role: ${candidate.applicant_role || 'the specified role'}
+Blind Score: ${result?.score ?? 'N/A'}/100
+Strengths identified: ${result?.strengths?.join(', ') || 'strong overall profile'}
+
+The email should:
+- Congratulate them on being shortlisted
+- Mention next steps (interview invitation)
+- Be warm and professional
+- Be 3-4 short paragraphs
+- NOT mention BlindHire, WorkforceMS, or the screening process
+- NOT include a subject line
+
+Return ONLY the email body text.`,
+    }], 500)
+      .then(text => { if (!cancelled) setEmail(text) })
+      .catch(() => { if (!cancelled) setEmail('Could not generate email. Please write one manually.') })
+      .finally(() => { if (!cancelled) setGenerating(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#141414', border: '1px solid #22c55e', borderRadius: '16px', padding: '32px', width: '520px', position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 1001, maxHeight: '90vh', overflowY: 'auto' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: '#9ca3af', fontSize: '22px', cursor: 'pointer', lineHeight: 1 }}>×</button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <CheckCircle size={24} color="#22c55e" />
+          <div style={{ fontSize: '20px', fontWeight: '700', color: '#ffffff' }}>Accept Candidate</div>
+        </div>
+        <div style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '20px' }}>
+          {candidateLabel} — {candidate.applicant_role}
+        </div>
+
+        {generating ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#9ca3af', padding: '20px 0' }}>
+            <ModalSpinner color="#22c55e" />
+            Generating email...
+          </div>
+        ) : (
+          <textarea
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={{
+              background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px',
+              padding: '16px', color: '#ffffff', fontSize: '14px', lineHeight: '1.7',
+              width: '100%', minHeight: '200px', marginTop: '12px',
+              fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+            }}
+          />
+        )}
+
+        <div style={{ background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', padding: '12px', marginTop: '12px' }}>
+          <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
+            📧 This is a demo simulation. In production, this email would be sent to the candidate's registered email address.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+          <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid #2a2a2a', color: '#9ca3af', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(email)}
+            disabled={loading || generating}
+            style={{ flex: 1, background: (loading || generating) ? '#1a3d28' : '#22c55e', color: (loading || generating) ? '#4a7a5a' : '#000000', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: '700', fontSize: '14px', cursor: (loading || generating) ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+          >
+            {loading ? 'Processing…' : 'Send & Move to Interview'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Reject Modal ─────────────────────────────────────────────────────────────
+
+function RejectModal({ candidate, candidateLabel, result, onClose, onConfirm, loading }) {
+  const [email, setEmail] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [reason, setReason] = useState('')
+
+  const generateEmail = async (selectedReason) => {
+    if (!selectedReason) return
+    setGenerating(true)
+    setEmail('')
+    try {
+      const text = await callGroqRaw([{
+        role: 'user',
+        content: `Generate a professional, empathetic rejection email for a job candidate.
+
+Role: ${candidate.applicant_role || 'the specified role'}
+Blind Score: ${result?.score ?? 'N/A'}/100
+Skill gaps identified: ${result?.gaps?.join(', ') || 'various areas'}
+Rejection reason: ${selectedReason}
+
+The email should:
+- Thank them sincerely for applying
+- Professionally communicate they were not selected
+- Encourage them to keep developing their skills
+- Be empathetic and respectful
+- Be 3-4 short paragraphs
+- NOT mention specific scores or the screening system
+- NOT be harsh or discouraging
+- End with encouragement
+
+Return ONLY the email body text.`,
+      }], 500)
+      setEmail(text)
+    } catch {
+      setEmail('Could not generate email. Please write one manually.')
+    }
+    setGenerating(false)
+  }
+
+  const handleReasonChange = (e) => {
+    const val = e.target.value
+    setReason(val)
+    if (val) generateEmail(val)
+    else setEmail('')
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#141414', border: '1px solid #ef4444', borderRadius: '16px', padding: '32px', width: '520px', position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 1001, maxHeight: '90vh', overflowY: 'auto' }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: '#9ca3af', fontSize: '22px', cursor: 'pointer', lineHeight: 1 }}>×</button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <XCircle size={24} color="#ef4444" />
+          <div style={{ fontSize: '20px', fontWeight: '700', color: '#ffffff' }}>Reject Candidate</div>
+        </div>
+        <div style={{ fontSize: '14px', color: '#9ca3af', marginBottom: '20px' }}>
+          {candidateLabel} — {candidate.applicant_role}
+        </div>
+
+        <label style={{ display: 'block', fontSize: '13px', color: '#9ca3af', marginBottom: '6px' }}>Reason for rejection</label>
+        <select
+          value={reason}
+          onChange={handleReasonChange}
+          style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px', padding: '10px', color: reason ? '#ffffff' : '#6b7280', width: '100%', marginBottom: '16px', fontFamily: 'inherit', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+        >
+          <option value="">Select a reason...</option>
+          <option value="Skills gap — does not meet requirements">Skills gap — does not meet requirements</option>
+          <option value="Insufficient experience">Insufficient experience</option>
+          <option value="Better candidates selected">Better candidates selected</option>
+          <option value="Role has been filled">Role has been filled</option>
+          <option value="Application incomplete">Application incomplete</option>
+        </select>
+
+        {generating && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#9ca3af', padding: '12px 0' }}>
+            <ModalSpinner color="#ef4444" />
+            Generating email...
+          </div>
+        )}
+
+        {!generating && email && (
+          <textarea
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            style={{
+              background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: '8px',
+              padding: '16px', color: '#ffffff', fontSize: '14px', lineHeight: '1.7',
+              width: '100%', minHeight: '200px', marginTop: '4px',
+              fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+            }}
+          />
+        )}
+
+        {!generating && email && (
+          <div style={{ background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', padding: '12px', marginTop: '12px' }}>
+            <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>
+              📧 This is a demo simulation. In production, this email would be sent to the candidate's registered email address.
+            </p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+          <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: '1px solid #2a2a2a', color: '#9ca3af', borderRadius: '8px', padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '14px' }}>
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(email, reason)}
+            disabled={loading || !reason}
+            style={{ flex: 1, background: (!reason || loading) ? '#2a0a0a' : '#ef4444', color: (!reason || loading) ? '#6b7280' : '#ffffff', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: '700', fontSize: '14px', cursor: (!reason || loading) ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+          >
+            {loading ? 'Processing…' : 'Send & Reject'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
 
 export default function BlindScreener() {
   const { applications, loading, error, updateStage } = useApplications()
@@ -196,7 +416,11 @@ export default function BlindScreener() {
   const [result, setResult] = useState(null)
 
   const [actionLoading, setActionLoading] = useState(false)
-  const [skillBridge, setSkillBridge] = useState(null) // { loading, data, error }
+  const [skillBridge, setSkillBridge] = useState(null)
+
+  const [acceptModal, setAcceptModal] = useState(false)
+  const [rejectModal, setRejectModal] = useState(false)
+  const [actionToast, setActionToast] = useState('')
 
   const pendingCandidates = applications
     .filter(a => a.stage === 'applied')
@@ -276,24 +500,53 @@ export default function BlindScreener() {
     }
   }
 
-  const handleAccept = async () => {
+  const showToast = (msg) => {
+    setActionToast(msg)
+    setTimeout(() => setActionToast(''), 3000)
+  }
+
+  const handleAccept = () => {
+    if (!selectedApp || !result) return
+    setAcceptModal(true)
+  }
+
+  const handleReject = () => {
     if (!selectedApp) return
+    setRejectModal(true)
+  }
+
+  const handleAcceptConfirm = async () => {
     setActionLoading(true)
     try {
+      await supabase
+        .from('applications')
+        .update({ stage: 'interview', updated_at: new Date().toISOString() })
+        .eq('id', selectedApp.id)
       await updateStage(selectedApp.id, 'interview')
-      setSelectedApp(prev => ({ ...prev, stage: 'interview' }))
+      setAcceptModal(false)
+      showToast('✓ Candidate moved to Interview')
+      setSelectedId('')
+      setSelectedApp(null)
+      setResult(null)
+      setSelectedIndex(-1)
+      setSkillBridge(null)
     } catch (e) {
       setAnalysisError(e.message)
     }
     setActionLoading(false)
   }
 
-  const handleReject = async () => {
-    if (!selectedApp) return
+  const handleRejectConfirm = async () => {
     setActionLoading(true)
     try {
+      await supabase
+        .from('applications')
+        .update({ stage: 'rejected', updated_at: new Date().toISOString() })
+        .eq('id', selectedApp.id)
       await updateStage(selectedApp.id, 'rejected')
       setSelectedApp(prev => ({ ...prev, stage: 'rejected' }))
+      setRejectModal(false)
+      showToast('✗ Candidate rejected')
       await runSkillBridge(result?.gaps)
     } catch (e) {
       setAnalysisError(e.message)
@@ -305,6 +558,7 @@ export default function BlindScreener() {
 
   return (
     <div style={s.page}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <TopBar title="Blind Screener" />
       <div style={s.content}>
         <div style={s.subtitle}>Select a candidate and role to run a blind AI screen</div>
@@ -314,6 +568,7 @@ export default function BlindScreener() {
           <div style={s.loading}>Loading applications…</div>
         ) : (
           <div style={s.layout}>
+            {/* Left panel */}
             <div style={s.leftPanel}>
               <div style={s.card}>
                 <div style={s.formGroup}>
@@ -366,18 +621,24 @@ export default function BlindScreener() {
                   {analysing ? 'Analysing…' : 'Analyse CV'}
                 </button>
 
+                {/* Feature 1 — View Original CV link */}
                 {selectedApp?.cv_file_url && (
                   <button
                     type="button"
-                    style={s.secondaryBtn}
                     onClick={() => window.open(selectedApp.cv_file_url, '_blank')}
+                    style={{
+                      display: 'block', textAlign: 'center', marginTop: '8px',
+                      color: '#3b82f6', fontSize: '13px', cursor: 'pointer',
+                      textDecoration: 'underline', background: 'none',
+                      border: 'none', padding: '4px', width: '100%',
+                    }}
                   >
-                    <FileText size={16} /> View Original CV PDF
+                    View Original CV PDF
                   </button>
                 )}
 
                 {selectedApp?.source === 'careers_portal' && (
-                  <div style={s.sourceBadge}>
+                  <div style={{ ...s.sourceBadge, marginTop: '10px' }}>
                     <CheckCircle size={13} /> Auto-anonymised on submission
                   </div>
                 )}
@@ -386,6 +647,7 @@ export default function BlindScreener() {
               </div>
             </div>
 
+            {/* Right panel */}
             <div style={s.rightPanel}>
               {!selectedApp ? (
                 <div style={s.emptyRight}>Select a candidate to begin screening.</div>
@@ -537,6 +799,42 @@ export default function BlindScreener() {
           </div>
         )}
       </div>
+
+      {/* Modals */}
+      {acceptModal && selectedApp && (
+        <AcceptModal
+          candidate={selectedApp}
+          candidateLabel={candidateLabel}
+          result={result}
+          onClose={() => setAcceptModal(false)}
+          onConfirm={handleAcceptConfirm}
+          loading={actionLoading}
+        />
+      )}
+
+      {rejectModal && selectedApp && (
+        <RejectModal
+          candidate={selectedApp}
+          candidateLabel={candidateLabel}
+          result={result}
+          onClose={() => setRejectModal(false)}
+          onConfirm={handleRejectConfirm}
+          loading={actionLoading}
+        />
+      )}
+
+      {/* Toast */}
+      {actionToast && (
+        <div style={{
+          position: 'fixed', bottom: '24px', right: '24px',
+          background: actionToast.startsWith('✓') ? '#22c55e' : '#ef4444',
+          color: actionToast.startsWith('✓') ? '#000000' : '#ffffff',
+          padding: '12px 20px', borderRadius: '8px',
+          fontWeight: '600', fontSize: '14px', zIndex: 9999,
+        }}>
+          {actionToast}
+        </div>
+      )}
     </div>
   )
 }
