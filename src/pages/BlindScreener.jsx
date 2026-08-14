@@ -162,7 +162,7 @@ async function callGroq(messages, max_tokens) {
   const res = await fetch('/api/groq', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'llama-3.1-8b-instant', max_tokens, messages }),
+    body: JSON.stringify({ model: 'openai/gpt-oss-20b', max_tokens, messages }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `Groq proxy error ${res.status}`)
@@ -175,7 +175,7 @@ async function callGroqRaw(messages, max_tokens) {
   const res = await fetch('/api/groq', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'llama-3.1-8b-instant', max_tokens, messages }),
+    body: JSON.stringify({ model: 'openai/gpt-oss-20b', max_tokens, messages }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data.error || `Groq proxy error ${res.status}`)
